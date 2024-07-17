@@ -20,6 +20,17 @@ async function checkStatus(url) {
   }
 }
 
+function generateGraph(status) {
+  const statusClass = status === 'UP' ? 'bar-green' : 'bar-red';
+  const percentage = status === 'UP' ? '100%' : '0%'; 
+  
+  return `
+    <div class="bar">
+      <div class="${statusClass}" style="width: ${percentage};"></div>
+    </div>
+  `;
+}
+
 app.get('/', async (req, res) => {
 
   let statusHtml = `
@@ -31,13 +42,14 @@ app.get('/', async (req, res) => {
     <title>adabit status</title>
     <style>
         :root {
-            --color-background: #13141a;
-            --color-text: #909096;
-            --color-highlight: #ebbcba;
-            --color-link: #9ccfd8;
+            --color-background: #202225;
+            --color-text: #dcddde;
+            --color-link: #7289da;
+            --color-bar-green: #43b581;
+            --color-bar-red: #f04747;
         }
         body {
-            font-family: monospace;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: var(--color-background);
             color: var(--color-text);
             margin: 0;
@@ -49,39 +61,34 @@ app.get('/', async (req, res) => {
             margin: 0 auto;
         }
         h1 {
-            color: var(--color-highlight);
+            color: #fff;
             margin-bottom: 5px;
-        }
-        nav {
-            margin-bottom: 20px;
-        }
-        nav a {
-            color: var(--color-link);
-            text-decoration: none;
-            margin-right: 10px;
         }
         .content {
             margin-bottom: 20px;
         }
-        .quick-links {
-            margin-top: 20px;
+        .bar {
+            width: 100%;
+            height: 10px;
+            background-color: #2f3136;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-bottom: 8px;
         }
-        .quick-links p {
+        .bar-green {
+            height: 100%;
+            background-color: var(--color-bar-green);
+            transition: width 0.3s ease;
+        }
+        .bar-red {
+            height: 100%;
+            background-color: var(--color-bar-red);
+            transition: width 0.3s ease;
+        }
+        .service-name {
+            font-size: 18px;
+            font-weight: bold;
             margin-bottom: 5px;
-        }
-        .quick-links a {
-            color: var(--color-link);
-            text-decoration: none;
-        }
-        .footer {
-            margin-top: 20px;
-            border-top: 1px solid var(--color-text);
-            padding-top: 10px;
-        }
-        .date {
-            position: absolute;
-            top: 20px;
-            right: 20px;
         }
     </style>
 </head>
@@ -91,22 +98,26 @@ app.get('/', async (req, res) => {
             <h1>status.adabit.org*</h1>
         </header>
         <main class="content">
-                    <h2 class="text-iris">Service Status</h2>
-        <ul class="list-default">
+            <h2 class="text-iris">Service Status</h2>
   `;
   
   for (const site of sites) {
     const status = await checkStatus(site.url);
-    const statusClass = status === 'UP' ? 'text-pine' : 'text-love';
-    statusHtml += `<li>${site.name}: <span class="${statusClass}">${status}</span></li>`;
+    const graphHtml = generateGraph(status);
+    const statusText = status === 'UP' ? 'everything is probably fine' : 'no respponse :(';
+    const serviceNameClass = status === 'UP' ? 'service-name text-green' : 'service-name text-red';
+    statusHtml += `
+      <div>
+        <div class="${serviceNameClass}">${site.name}</div>
+        <div>${graphHtml}</div>
+        <div>${statusText}</div>
+      </div>
+    `;
   }
   
   statusHtml += `
-        </ul>        </main>
-        <div class="quick-links">
-            <p><a href="mailto:me@adabit.org">something weird? → status@adabit.org</a></p>
-        </div>
-        <footer class="footer">
+        </main>
+        <footer>
             <p>trans rights are human rights</p>
         </footer>
     </div>
