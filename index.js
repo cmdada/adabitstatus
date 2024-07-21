@@ -4,11 +4,11 @@ const app = express();
 const port = 3001;
 
 const sites = [
-  { name: 'Nextcloud', url: 'https://nextcloud.poweredge.xyz/' },
-  { name: 'Navidrome', url: 'https://navidrome.poweredge.xyz/' },
-  { name: 'Adabit', url: 'https://adabit.org' },
-  { name: 'Poweredge', url: 'https://poweredge.xyz' },
-  { name: 'n8n', url: 'https://n8n.poweredge.xyz/' }
+  { name: 'nextcloud', url: 'https://nextcloud.poweredge.xyz/' },
+  { name: 'navidrome', url: 'https://navidrome.poweredge.xyz/' },
+  { name: 'adarun', url: 'https://poweredge.xyz' },
+  { name: 'n8n', url: 'https://n8n.poweredge.xyz/' },
+  { name: 'tbds.adabit.org', url: 'https://tbds.adabit.org/' }
 ];
 
 async function checkStatus(url) {
@@ -104,7 +104,7 @@ app.get('/', async (req, res) => {
   for (const site of sites) {
     const status = await checkStatus(site.url);
     const graphHtml = generateGraph(status);
-    const statusText = status === 'UP' ? 'everything is probably fine' : 'no respponse :(';
+    const statusText = status === 'UP' ? '' : 'no respponse :(';
     const serviceNameClass = status === 'UP' ? 'service-name text-green' : 'service-name text-red';
     statusHtml += `
       <div>
