@@ -44,7 +44,7 @@ async function updateStatus() {
   console.log('Status update complete.');
 }
 
-setInterval(updateStatus, 60 * 1000);
+setInterval(updateStatus, 30 * 1000);
 
 updateStatus();
 
