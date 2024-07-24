@@ -101,8 +101,8 @@ app.get('/', async (req, res) => {
     <title>adabit status</title>
     <style>
         :root {
-            --color-background: #1a1b1e;
-            --color-text: #e0e0e0;
+            --color-background: #0d181f;
+            --color-text: #e0def4;
             --color-link: #7289da;
             --color-green: #43b581;
             --color-red: #f04747;
@@ -135,7 +135,7 @@ app.get('/', async (req, res) => {
             gap: 20px;
         }
         .service-card {
-            background-color: #25262b;
+            background-color: #0f292b;
             border-radius: 10px;
             padding: 20px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
@@ -173,7 +173,7 @@ app.get('/', async (req, res) => {
             font-style: italic;
         }
     </style>
-</head>
+    </head>
 <body>
     <div class="container">
         <header>
@@ -228,3 +228,4 @@ app.get('/', async (req, res) => {
 app.listen(port, () => {
   console.log(` app listening at http://localhost:${port}`);
 });
+
