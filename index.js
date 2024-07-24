@@ -7,11 +7,12 @@ const port = 3001;
 const db = new sqlite3.Database('./status.db');
 
 const sites = [
-  { name: 'nextcloud', url: 'https://nextcloud.poweredge.xyz/' },
-  { name: 'navidrome', url: 'https://navidrome.poweredge.xyz/' },
-  { name: 'adarun', url: 'https://poweredge.xyz' },
-  { name: 'n8n', url: 'https://n8n.poweredge.xyz/' },
-  { name: 'tbds.adabit.org', url: 'https://tbds.adabit.org/' }
+  { name: 'nextcloud.poweredge.xyz', url: 'https://nextcloud.poweredge.xyz/' },
+  { name: 'navidrome.poweredge.xyz', url: 'https://navidrome.poweredge.xyz/' },
+  { name: 'poweredge.xyz', url: 'https://poweredge.xyz' },
+  { name: 'n8n.poweredge.xyz', url: 'https://n8n.poweredge.xyz/' },
+  { name: 'tbds.adabit.org', url: 'https://tbds.adabit.org/' },
+  { name: 'adabit.org', url: 'https://www.adabit.org/' }
 ];
 
 db.run(`CREATE TABLE IF NOT EXISTS status_history (
@@ -215,8 +216,7 @@ app.get('/', async (req, res) => {
         </footer>
     </div>
     <script>
-      // Refresh the page every 3 minutes
-      setTimeout(() => location.reload(), 3 * 60 * 1000);
+      setTimeout(() => location.reload(), 30 * 1000);
     </script>
 </body>
 </html>
