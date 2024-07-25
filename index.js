@@ -45,9 +45,23 @@ async function updateStatus() {
   console.log('Status update complete.');
 }
 
+function removeOldEntries() {
+  console.log('Removing old entries...');
+  const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
+  db.run('DELETE FROM status_history WHERE timestamp < ?', [fourHoursAgo], (err) => {
+    if (err) {
+      console.error('Error removing old entries:', err);
+    } else {
+      console.log('Old entries removed successfully.');
+    }
+  });
+}
+
 setInterval(updateStatus, 30 * 1000);
+setInterval(removeOldEntries, 4 * 60 * 60 * 1000); // Run every 4 hours
 
 updateStatus();
+removeOldEntries(); // Run immediately on startup cause this is being deployed to prod :3
 
 function getStatusColor(status) {
   return status === 'UP' ? 'var(--color-green)' : 'var(--color-red)';
@@ -226,6 +240,5 @@ app.get('/', async (req, res) => {
 });
 
 app.listen(port, () => {
-  console.log(` app listening at http://localhost:${port}`);
+  console.log(`app listening at http://localhost:${port}`);
 });
-
