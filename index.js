@@ -225,53 +225,51 @@ app.get('/', async (req, res) => {
       `;
 
       html += `
-        <script>
-          new Chart(document.getElementById('chart-${index}'), {
-            type: 'line',
-            data: {
-              labels: ${JSON.stringify(labels)},
-              datasets: [{
-                label: 'Response Time',
-                data: ${JSON.stringify(datapoints)},
-                fill: true,
-                borderColor: '#43b581',
-                cubicInterpolationMode: 'monotone',
-                tension: 0.4,
-                pointBorderWidth: 0
-              }]
-            },
-            options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              scales: {
-                x: {
-                  display: false
-                  ticks: {
-                    callback: (label, index, ticks) => {
-                      const format = 'DD HH'; // Change how you please
-                      return new Moment(ticks[index].value)
-                        .utcOffset(this.timeZoneOffsetSeconds / 60)
-                        .format(format);
-                    }
-                  }
-                },
-                y: {
-                  beginAtZero: true,
-                  ticks: {
+      <script>
+        new Chart(document.getElementById('chart-${index}'), {
+          type: 'line',
+          data: {
+            labels: ${JSON.stringify(labels)},
+            datasets: [{
+              label: 'Response Time',
+              data: ${JSON.stringify(datapoints)},
+              fill: true,
+              borderColor: '#43b581',
+              cubicInterpolationMode: 'monotone',
+              tension: 0.4,
+              pointBorderWidth: 0
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: {
+                display: false,
+                ticks: {
+                  callback: (label, index, ticks) => {
+                    const format = 'DD HH'; // Change as needed
+                    return new Moment(ticks[index].value)
+                      .utcOffset(this.timeZoneOffsetSeconds / 60)
+                      .format(format);
                   }
                 }
               },
-              plugins: {
-                legend: {
-                  display: false
-                }
+              y: {
+                beginAtZero: true,
+                ticks: {}
+              }
+            },
+            plugins: {
+              legend: {
+                display: false
               }
             }
-          });
-        </script>
-      `;
-    });
-
+          }
+        });
+      </script>
+    `;
+    
     html += `
           </main>
           <footer>
