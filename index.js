@@ -39,7 +39,7 @@ async function updateStatus() {
   console.log('Updating status...');
   for (const site of sites) {
     const { status, responseTime } = await checkStatus(site.url);
-    db.run('INSERT INTO status_history (site_name, status, response_time) VALUES (?, ?, ?)', 
+    db.run('INSERT INTO status_history (site_name, status, response_time) VALUES (?, ?, ?)',
       [site.name, status, responseTime]);
   }
   console.log('Status update complete.');
@@ -47,8 +47,8 @@ async function updateStatus() {
 
 function removeOldEntries() {
   console.log('Removing old entries...');
-  const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
-  db.run('DELETE FROM status_history WHERE timestamp < ?', [fourHoursAgo], (err) => {
+  const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  db.run('DELETE FROM status_history WHERE timestamp < ?', [thirtyMinutesAgo], (err) => {
     if (err) {
       console.error('Error removing old entries:', err);
     } else {
@@ -58,10 +58,10 @@ function removeOldEntries() {
 }
 
 setInterval(updateStatus, 30 * 1000);
-setInterval(removeOldEntries, 4 * 60 * 60 * 1000); // Run every 4 hours
+setInterval(removeOldEntries, 5 * 60 * 1000);
 
 updateStatus();
-removeOldEntries(); // Run immediately on startup cause this is being deployed to prod :3
+removeOldEntries();
 
 function getStatusColor(status) {
   return status === 'UP' ? 'var(--color-green)' : 'var(--color-red)';
@@ -76,9 +76,9 @@ app.get('/', async (req, res) => {
           else resolve(row || { status: 'UNKNOWN', response_time: null });
         });
     });
-    
+
     const historyData = await new Promise((resolve, reject) => {
-      db.all('SELECT status, response_time, timestamp FROM status_history WHERE site_name = ? ORDER BY timestamp DESC LIMIT 480', 
+      db.all('SELECT status, response_time, timestamp FROM status_history WHERE site_name = ? ORDER BY timestamp ASC',
         [site.name], (err, rows) => {
           if (err) reject(err);
           else resolve(rows);
@@ -174,13 +174,13 @@ app.get('/', async (req, res) => {
         .history-graph {
             margin-top: 20px;
             height: 50px;
-            display: flex;
-            align-items: flex-end;
+            position: relative;
         }
-        .history-bar {
-            flex: 1;
-            margin: 0 1px;
-            transition: height 0.3s ease;
+        .history-path {
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
         }
         footer {
             text-align: center;
@@ -196,13 +196,16 @@ app.get('/', async (req, res) => {
         </header>
         <main class="content">
   `;
-  
+
   statuses.forEach(site => {
     const statusColor = getStatusColor(site.currentStatus);
-    const historyBars = site.history.map(record => {
-      const height = record.response_time ? Math.min(100, record.response_time / 10) : 0;
-      return `<div class="history-bar" style="height: ${height}%; background-color: ${getStatusColor(record.status)};"></div>`;
-    }).join('');
+    const graphWidth = 300;
+    const graphHeight = 50;
+    const pathData = site.history.map((record, index) => {
+      const x = (index / (site.history.length - 1)) * graphWidth;
+      const y = record.response_time ? graphHeight - Math.min(graphHeight, record.response_time / 10) : graphHeight;
+      return `${index === 0 ? 'M' : 'L'} ${x},${y}`;
+    }).join(' ');
 
     html += `
       <div class="service-card">
@@ -217,12 +220,14 @@ app.get('/', async (req, res) => {
           <div>Avg Response Time: ${site.avgResponseTime}ms</div>
         </div>
         <div class="history-graph">
-          ${historyBars}
+          <svg width="${graphWidth}" height="${graphHeight}">
+            <path d="${pathData}" class="history-path" stroke="${statusColor}" />
+          </svg>
         </div>
       </div>
     `;
   });
-  
+
   html += `
         </main>
         <footer>
@@ -235,7 +240,7 @@ app.get('/', async (req, res) => {
 </body>
 </html>
   `;
-  
+
   res.send(html);
 });
 
