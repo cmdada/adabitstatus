@@ -118,14 +118,14 @@ app.get('/', async (req, res) => {
 
    
     let html = `
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>adabit status</title>
-        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-        <style>
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>adabit status</title>
+          <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
             :root {
                 --color-background: #0d181f;
                 --color-text: #e0def4;
@@ -192,107 +192,100 @@ app.get('/', async (req, res) => {
                 font-style: italic;
             }
         </style>
-        </head>
-    <body>
-        <div class="container">
-            <header>
-                <h1>status.adabit.org</h1>
-            </header>
-            <main class="content">
-    `;
-
-    statuses.forEach((site, index) => {
-      const statusColor = getStatusColor(site.currentStatus);
-      const labels = site.history.map(record => new Date(record.timestamp).toLocaleTimeString());
-      const datapoints = site.history.map(record => record.response_time);
-
-      html += `
-        <div class="service-card">
-          <div class="service-name">
-            <span class="status-indicator" style="background-color: ${statusColor};"></span>
-            ${site.name}
-          </div>
-          <div>Status: ${site.currentStatus}</div>
-          <div>Response Time: ${site.responseTime ? `${site.responseTime}ms` : 'N/A'}</div>
-          <div class="stats">
-            <div>Uptime: ${site.uptime}%</div>
-            <div>Avg Response Time: ${site.avgResponseTime}ms</div>
-          </div>
-          <div class="history-graph">
-            <canvas id="chart-${index}"></canvas>
-          </div>
-        </div>
+      </head>
+      <body>
+          <div class="container">
+              <header>
+                  <h1>status.adabit.org</h1>
+              </header>
+              <main class="content">
       `;
-
-      html += `
-      <script>
-        new Chart(document.getElementById('chart-${index}'), {
-          type: 'line',
-          data: {
-            labels: ${JSON.stringify(labels)},
-            datasets: [{
-              label: 'Response Time',
-              data: ${JSON.stringify(datapoints)},
-              fill: true,
-              borderColor: '#43b581',
-              cubicInterpolationMode: 'monotone',
-              tension: 0.4,
-              pointBorderWidth: 0
-            }]
-          },
-          options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-              x: {
-                display: false,
-                ticks: {
-                  callback: (label, index, ticks) => {
-                    const format = 'DD HH'; // Change as needed
-                    return new Moment(ticks[index].value)
-                      .utcOffset(this.timeZoneOffsetSeconds / 60)
-                      .format(format);
+      
+      statuses.forEach((site, index) => {
+          const statusColor = getStatusColor(site.currentStatus);
+          const labels = site.history.map(record => new Date(record.timestamp).toLocaleTimeString());
+          const datapoints = site.history.map(record => record.response_time);
+      
+          html += `
+              <div class="service-card">
+                  <div class="service-name">
+                      <span class="status-indicator" style="background-color: ${statusColor};"></span>
+                      ${site.name}
+                  </div>
+                  <div>Status: ${site.currentStatus}</div>
+                  <div>Response Time: ${site.responseTime ? `${site.responseTime}ms` : 'N/A'}</div>
+                  <div class="stats">
+                      <div>Uptime: ${site.uptime}%</div>
+                      <div>Avg Response Time: ${site.avgResponseTime}ms</div>
+                  </div>
+                  <div class="history-graph">
+                      <canvas id="chart-${index}"></canvas>
+                  </div>
+              </div>
+          `;
+      
+          html += `
+          <script>
+              new Chart(document.getElementById('chart-${index}'), {
+                  type: 'line',
+                  data: {
+                      labels: ${JSON.stringify(labels)},
+                      datasets: [{
+                          label: 'Response Time',
+                          data: ${JSON.stringify(datapoints)},
+                          fill: true,
+                          borderColor: '#43b581',
+                          cubicInterpolationMode: 'monotone',
+                          tension: 0.4,
+                          pointBorderWidth: 0
+                      }]
+                  },
+                  options: {
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      scales: {
+                          x: {
+                              display: false
+                          },
+                          y: {
+                              beginAtZero: true
+                          }
+                      },
+                      plugins: {
+                          legend: {
+                              display: false
+                          }
+                      }
                   }
-                }
-              },
-              y: {
-                beginAtZero: true,
-                ticks: {}
-              }
-            },
-            plugins: {
-              legend: {
-                display: false
-              }
-            }
-          }
-        });
-      </script>
-    `;
-    
-    html += `
-          </main>
-          <footer>
-              <p>trans rights are human rights</p>
-          </footer>
-      </div>
-      <script>
-        // Check for new data every 30 seconds
-        const checkForNewData = async () => {
-          const response = await fetch('/');
-          const newData = await response.text();
-          if (newData !== document.documentElement.outerHTML) {
-            location.reload();
-          }
-        };
-        setInterval(checkForNewData, 30 * 1000);
-      </script>
-    </body>
-    </html>
-    `;
-
-    res.send(html);
-  } catch (error) {
+              });
+          </script>
+          `;
+      });
+      
+      html += `
+              </main>
+              <footer>
+                  <p>trans rights are human rights</p>
+              </footer>
+          </div>
+          <script>
+              // Check for new data every 30 seconds
+              const checkForNewData = async () => {
+                  const response = await fetch('/');
+                  const newData = await response.text();
+                  if (newData !== document.documentElement.outerHTML) {
+                      location.reload();
+                  }
+              };
+              setInterval(checkForNewData, 30 * 1000);
+          </script>
+      </body>
+      </html>
+      `;
+      
+      // Send the HTML response
+      res.send(html);
+    } catch (error) {
     console.error('Error generating status page:', error.message);
     res.status(500).send('An error occurred while generating the status page');
   }
