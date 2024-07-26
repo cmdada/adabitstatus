@@ -47,7 +47,7 @@ async function updateStatus() {
 
 function removeOldEntries() {
   console.log('Removing old entries...');
-  const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const thirtyMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
   db.run('DELETE FROM status_history WHERE timestamp < ?', [thirtyMinutesAgo], (err) => {
     if (err) {
       console.error('Error removing old entries:', err);
@@ -58,10 +58,9 @@ function removeOldEntries() {
 }
 
 setInterval(updateStatus, 30 * 1000);
-setInterval(removeOldEntries, 5 * 60 * 1000);
+setInterval(removeOldEntries, 5 * 60 * 1000); // Run every 5 minutes
 
 updateStatus();
-removeOldEntries();
 
 function getStatusColor(status) {
   return status === 'UP' ? 'var(--color-green)' : 'var(--color-red)';
@@ -114,6 +113,7 @@ app.get('/', async (req, res) => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>adabit status</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
             --color-background: #0d181f;
@@ -173,14 +173,7 @@ app.get('/', async (req, res) => {
         }
         .history-graph {
             margin-top: 20px;
-            height: 50px;
-            position: relative;
-        }
-        .history-path {
-            fill: none;
-            stroke-width: 2;
-            stroke-linecap: round;
-            stroke-linejoin: round;
+            height: 100px;
         }
         footer {
             text-align: center;
@@ -197,15 +190,10 @@ app.get('/', async (req, res) => {
         <main class="content">
   `;
 
-  statuses.forEach(site => {
+  statuses.forEach((site, index) => {
     const statusColor = getStatusColor(site.currentStatus);
-    const graphWidth = 300;
-    const graphHeight = 50;
-    const pathData = site.history.map((record, index) => {
-      const x = (index / (site.history.length - 1)) * graphWidth;
-      const y = record.response_time ? graphHeight - Math.min(graphHeight, record.response_time / 10) : graphHeight;
-      return `${index === 0 ? 'M' : 'L'} ${x},${y}`;
-    }).join(' ');
+    const labels = site.history.map(record => new Date(record.timestamp).toLocaleTimeString());
+    const datapoints = site.history.map(record => record.response_time);
 
     html += `
       <div class="service-card">
@@ -220,11 +208,48 @@ app.get('/', async (req, res) => {
           <div>Avg Response Time: ${site.avgResponseTime}ms</div>
         </div>
         <div class="history-graph">
-          <svg width="${graphWidth}" height="${graphHeight}">
-            <path d="${pathData}" class="history-path" stroke="${statusColor}" />
-          </svg>
+          <canvas id="chart-${index}"></canvas>
         </div>
       </div>
+    `;
+
+    html += `
+      <script>
+        new Chart(document.getElementById('chart-${index}'), {
+          type: 'line',
+          data: {
+            labels: ${JSON.stringify(labels)},
+            datasets: [{
+              label: 'Response Time',
+              data: ${JSON.stringify(datapoints)},
+              fill: true,
+              borderColor: '#43b581',
+              cubicInterpolationMode: 'monotone',
+              tension: 0.4,
+              pointBorderWidth: 0
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: {
+                display: false
+              },
+              y: {
+                beginAtZero: true,
+                ticks: {
+                }
+              }
+            },
+            plugins: {
+              legend: {
+                display: false
+              }
+            }
+          }
+        });
+      </script>
     `;
   });
 
@@ -235,7 +260,7 @@ app.get('/', async (req, res) => {
         </footer>
     </div>
     <script>
-      setTimeout(() => location.reload(), 30 * 1000);
+      setTimeout(() => location.reload(), 5 * 1000);
     </script>
 </body>
 </html>
