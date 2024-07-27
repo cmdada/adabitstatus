@@ -3,8 +3,6 @@ const axios = require('axios');
 const sqlite3 = require('sqlite3').verbose();
 const app = express();
 const port = 3001;
-const moment = require('moment');
-
 const db = new sqlite3.Database('./status.db', (err) => {
   if (err) {
     console.error('Error opening database:', err.message);
@@ -20,6 +18,8 @@ const sites = [
   { name: 'poweredge.xyz', url: 'https://poweredge.xyz' },
   { name: 'n8n.poweredge.xyz', url: 'https://n8n.poweredge.xyz/' },
   { name: 'tbds.adabit.org', url: 'https://tbds.adabit.org/' },
+  { name: 'adas.software git', url: 'https://adas.software/' },
+  { name: 'bhsgsa.org', url: 'https://bhsgsa.org' },
   { name: 'adabit.org', url: 'https://www.adabit.org/' }
 ];
 
