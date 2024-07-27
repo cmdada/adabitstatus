@@ -86,7 +86,7 @@ app.get('/', async (req, res) => {
   try {
     const statusPromises = sites.map(async (site) => {
       return new Promise((resolve, reject) => {
-        db.all('SELECT status, response_time, timestamp FROM status_history WHERE site_name = ? ORDER BY timestamp DESC LIMIT 20',
+        db.all('SELECT status, response_time, timestamp FROM status_history WHERE site_name = ? ORDER BY timestamp DESC LIMIT 120',
           [site.name], (err, rows) => {
             if (err) {
               console.error(`Error fetching data for ${site.name}:`, err.message);
@@ -236,7 +236,7 @@ app.get('/', async (req, res) => {
                           fill: true,
                           borderColor: '#43b581',
                           cubicInterpolationMode: 'monotone',
-                          tension: 0.4,
+                          tension: 0.2,
                           pointBorderWidth: 0
                       }]
                   },
