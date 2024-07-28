@@ -3,6 +3,8 @@ const axios = require('axios');
 const sqlite3 = require('sqlite3').verbose();
 const app = express();
 const port = 3001;
+const moment = require('moment-timezone');
+
 const db = new sqlite3.Database('./status.db', (err) => {
   if (err) {
     console.error('Error opening database:', err.message);
@@ -18,8 +20,6 @@ const sites = [
   { name: 'poweredge.xyz', url: 'https://poweredge.xyz' },
   { name: 'n8n.poweredge.xyz', url: 'https://n8n.poweredge.xyz/' },
   { name: 'tbds.adabit.org', url: 'https://tbds.adabit.org/' },
-  { name: 'adas.software git', url: 'https://adas.software/' },
-  { name: 'bhsgsa.org', url: 'https://bhsgsa.org' },
   { name: 'adabit.org', url: 'https://www.adabit.org/' }
 ];
 
@@ -72,10 +72,8 @@ async function updateStatus() {
   console.log('Status update complete.');
 }
 
-// Run updateStatus immediately when the server starts
 updateStatus();
 
-// Then set interval to run every 30 seconds
 setInterval(updateStatus, 30 * 1000);
 
 function getStatusColor(status) {
@@ -107,7 +105,10 @@ app.get('/', async (req, res) => {
                 responseTime: recentStatus.response_time,
                 uptime: uptimePercentage,
                 avgResponseTime,
-                history: rows.reverse()
+                history: rows.reverse().map(record => ({
+                  ...record,
+                  timestamp: moment(record.timestamp).format()
+                }))
               });
             }
           });
@@ -116,7 +117,6 @@ app.get('/', async (req, res) => {
 
     const statuses = await Promise.all(statusPromises);
 
-   
     let html = `
       <!DOCTYPE html>
       <html lang="en">
@@ -125,7 +125,9 @@ app.get('/', async (req, res) => {
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>adabit status</title>
           <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<style>
+          <script src="https://poweredge.xyz/moment.min.js"></script>
+          <script src="https://poweredge.xyz/moment-timezone-with-data.min.js"></script>
+          <style>
             :root {
                 --color-background: #0d181f;
                 --color-text: #e0def4;
@@ -191,7 +193,7 @@ app.get('/', async (req, res) => {
                 margin-top: 40px;
                 font-style: italic;
             }
-        </style>
+          </style>
       </head>
       <body>
           <div class="container">
@@ -199,93 +201,106 @@ app.get('/', async (req, res) => {
                   <h1>status.adabit.org</h1>
               </header>
               <main class="content">
-      `;
-      
-      statuses.forEach((site, index) => {
-          const statusColor = getStatusColor(site.currentStatus);
-          const labels = site.history.map(record => new Date(record.timestamp).toLocaleTimeString());
-          const datapoints = site.history.map(record => record.response_time);
-      
-          html += `
-              <div class="service-card">
-                  <div class="service-name">
-                      <span class="status-indicator" style="background-color: ${statusColor};"></span>
-                      ${site.name}
-                  </div>
-                  <div>Status: ${site.currentStatus}</div>
-                  <div>Response Time: ${site.responseTime ? `${site.responseTime}ms` : 'N/A'}</div>
-                  <div class="stats">
-                      <div>Uptime: ${site.uptime}%</div>
-                      <div>Avg Response Time: ${site.avgResponseTime}ms</div>
-                  </div>
-                  <div class="history-graph">
-                      <canvas id="chart-${index}"></canvas>
-                  </div>
-              </div>
-          `;
-      
-          html += `
-          <script>
-              new Chart(document.getElementById('chart-${index}'), {
-                  type: 'line',
-                  data: {
-                      labels: ${JSON.stringify(labels)},
-                      datasets: [{
-                          label: 'Response Time',
-                          data: ${JSON.stringify(datapoints)},
-                          fill: true,
-                          borderColor: '#43b581',
-                          cubicInterpolationMode: 'monotone',
-                          tension: 0.2,
-                          pointBorderWidth: 0
-                      }]
-                  },
-                  options: {
-                      responsive: true,
-                      maintainAspectRatio: false,
-                      scales: {
-                          x: {
-                              display: false
-                          },
-                          y: {
-                              beginAtZero: true
-                          }
-                      },
-                      plugins: {
-                          legend: {
-                              display: false
-                          }
-                      }
-                  }
-              });
-          </script>
-          `;
-      });
-      
-      html += `
-              </main>
-              <footer>
-                  <p>trans rights are human rights</p>
-              </footer>
-          </div>
-          <script>
-              // Check for new data every 30 seconds
-              const checkForNewData = async () => {
-                  const response = await fetch('/');
-                  const newData = await response.text();
-                  if (newData !== document.documentElement.outerHTML) {
-                      location.reload();
-                  }
-              };
-              setInterval(checkForNewData, 30 * 1000);
-          </script>
-      </body>
-      </html>
-      `;
-      
-      // Send the HTML response
-      res.send(html);
-    } catch (error) {
+    `;
+    
+    statuses.forEach((site, index) => {
+        const statusColor = getStatusColor(site.currentStatus);
+        
+        html += `
+            <div class="service-card">
+                <div class="service-name">
+                    <span class="status-indicator" style="background-color: ${statusColor};"></span>
+                    ${site.name}
+                </div>
+                <div>Status: ${site.currentStatus}</div>
+                <div>Response Time: ${site.responseTime ? `${site.responseTime}ms` : 'N/A'}</div>
+                <div class="stats">
+                    <div>Uptime: ${site.uptime}%</div>
+                    <div>Avg Response Time: ${site.avgResponseTime}ms</div>
+                </div>
+                <div class="history-graph">
+                    <canvas id="chart-${index}"></canvas>
+                </div>
+            </div>
+        `;
+    
+        html += `
+        <script>
+            (function() {
+                const data = ${JSON.stringify(site.history)};
+                const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                const labels = data.map(record => moment(record.timestamp).tz(userTimezone).format('HH:mm:ss'));
+                const datapoints = data.map(record => record.response_time);
+
+                new Chart(document.getElementById('chart-${index}'), {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Response Time',
+                            data: datapoints,
+                            fill: true,
+                            borderColor: '#43b581',
+                            cubicInterpolationMode: 'monotone',
+                            tension: 0.2,
+                            pointBorderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                display: false
+                            },
+                            y: {
+                                beginAtZero: true
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    title: function(context) {
+                                        const index = context[0].dataIndex;
+                                        return moment(data[index].timestamp).tz(userTimezone).format('YYYY-MM-DD HH:mm:ss');
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            })();
+        </script>
+        `;
+    });
+    
+    html += `
+            </main>
+            <footer>
+                <p>trans rights are human rights</p>
+            </footer>
+        </div>
+        <script>
+            // Check for new data every 30 seconds
+            const checkForNewData = async () => {
+                const response = await fetch('/');
+                const newData = await response.text();
+                if (newData !== document.documentElement.outerHTML) {
+                    location.reload();
+                }
+            };
+            setInterval(checkForNewData, 30 * 1000);
+        </script>
+    </body>
+    </html>
+    `;
+    
+    // Send the HTML response
+    res.send(html);
+  } catch (error) {
     console.error('Error generating status page:', error.message);
     res.status(500).send('An error occurred while generating the status page');
   }
