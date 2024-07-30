@@ -20,6 +20,8 @@ const sites = [
   { name: 'poweredge.xyz', url: 'https://poweredge.xyz' },
   { name: 'n8n.poweredge.xyz', url: 'https://n8n.poweredge.xyz/' },
   { name: 'tbds.adabit.org', url: 'https://tbds.adabit.org/' },
+  { name: 'bhsgsa.org', url: 'https://bhsgsa.org/' },
+  { name: 'adas.software git', url: 'https://adas.software/' },
   { name: 'adabit.org', url: 'https://www.adabit.org/' }
 ];
 
