@@ -1,215 +1,316 @@
 const express = require('express');
-const bcrypt = require('bcrypt');
+const axios = require('axios');
 const sqlite3 = require('sqlite3').verbose();
 const app = express();
-const port = 3000;
+const port = 3001;
+const moment = require('moment-timezone');
+const fs = require('fs');
+const path = require('path');
 
-const db = new sqlite3.Database(':memory:');
-const authDb = new sqlite3.Database(':memory:');
+// Load configuration
+const configFilePath = path.resolve(__dirname, 'config.json');
+let sites = [];
 
-// Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+try {
+  const config = JSON.parse(fs.readFileSync(configFilePath, 'utf8'));
+  sites = config.sites || [];
+} catch (err) {
+  console.error('Error loading config file:', err.message);
+}
 
-// Create tables
-db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS user_preferences (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE,
-    data_limit INTEGER,
-    update_interval INTEGER,
-    sites TEXT
-  )`);
-
-  authDb.run(`CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE,
-    password TEXT
-  )`);
-});
-
-// Routes
-app.get('/', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Login</title>
-        <style>
-            body {
-                font-family: Arial, sans-serif;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                height: 100vh;
-                margin: 0;
-            }
-            .login-container {
-                border: 1px solid #ccc;
-                padding: 1rem;
-                border-radius: 5px;
-                box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            }
-            input {
-                display: block;
-                width: 100%;
-                margin-bottom: 1rem;
-                padding: 0.5rem;
-                font-size: 1rem;
-            }
-            button {
-                background-color: #007bff;
-                color: white;
-                border: none;
-                padding: 0.5rem;
-                font-size: 1rem;
-                cursor: pointer;
-            }
-            button:hover {
-                background-color: #0056b3;
-            }
-        </style>
-    </head>
-    <body>
-        <div class="login-container">
-            <h1>Login</h1>
-            <form action="/login" method="POST">
-                <input type="text" name="username" placeholder="Username" required>
-                <input type="password" name="password" placeholder="Password" required>
-                <button type="submit">Login</button>
-            </form>
-        </div>
-    </body>
-    </html>
-  `);
-});
-
-app.post('/register', async (req, res) => {
-  const { username, password } = req.body;
-  try {
-    const hashedPassword = await bcrypt.hash(password, 10);
-    authDb.run('INSERT INTO users (username, password) VALUES (?, ?)', [username, hashedPassword], function (err) {
-      if (err) {
-        console.error('Error registering user:', err.message);
-        res.status(500).json({ error: 'Error registering user' });
-      } else {
-        db.run('INSERT INTO user_preferences (username) VALUES (?)', [username], function (err) {
-          if (err) {
-            console.error('Error creating user preferences:', err.message);
-          }
-        });
-        res.json({ message: 'User registered successfully' });
-      }
-    });
-  } catch (error) {
-    console.error('Error hashing password:', error);
-    res.status(500).json({ error: 'Error registering user' });
+const db = new sqlite3.Database('./status.db', (err) => {
+  if (err) {
+    console.error('Error opening database:', err.message);
+  } else {
+    console.log('Connected to the SQLite database.');
+    createTable();
   }
 });
 
-app.post('/login', async (req, res) => {
-  const { username, password } = req.body;
-  authDb.get('SELECT * FROM users WHERE username = ?', [username], async (err, user) => {
+function createTable() {
+  db.run(`CREATE TABLE IF NOT EXISTS status_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    site_name TEXT NOT NULL,
+    status TEXT NOT NULL,
+    response_time INTEGER,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+  )`, (err) => {
     if (err) {
-      console.error('Error fetching user:', err.message);
-      res.status(500).json({ error: 'Error logging in' });
-    } else if (user && await bcrypt.compare(password, user.password)) {
-      res.json({ message: 'Login successful' });
+      console.error('Error creating table:', err.message);
     } else {
-      res.status(401).json({ error: 'Invalid username or password' });
+      console.log('status_history table created or already exists.');
     }
   });
-});
+}
 
-app.get('/config', (req, res) => {
-  res.send(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Configuration</title>
-    </head>
-    <body>
-        <form id="configForm">
-            <label for="dataLimit">Data Limit:</label>
-            <input type="number" id="dataLimit" name="data_limit" required>
-            <label for="updateInterval">Update Interval:</label>
-            <input type="number" id="updateInterval" name="update_interval" required>
-            <label for="sites">Sites:</label>
-            <textarea id="sites" name="sites" required></textarea>
-            <button type="submit">Save</button>
-        </form>
+
+async function checkStatus(url) {
+  try {
+    const startTime = Date.now();
+    const response = await axios.get(url, { timeout: 5000 });
+    const endTime = Date.now();
+    const responseTime = endTime - startTime;
+    return { status: 'UP', responseTime };
+  } catch (error) {
+    console.error(`Error checking ${url}:`, error.message);
+    return { status: 'DOWN', responseTime: null };
+  }
+}
+
+async function updateStatus() {
+  console.log('Updating status...');
+  for (const site of sites) {
+    try {
+      const { status, responseTime } = await checkStatus(site.url);
+      db.run('INSERT INTO status_history (site_name, status, response_time) VALUES (?, ?, ?)',
+        [site.name, status, responseTime], function(err) {
+          if (err) {
+            console.error(`Error inserting status for ${site.name}:`, err.message);
+          } else {
+            console.log(`Status updated for ${site.name}: ${status}, ${responseTime}ms`);
+          }
+        });
+    } catch (error) {
+      console.error(`Error updating status for ${site.name}:`, error.message);
+    }
+  }
+  console.log('Status update complete.');
+}
+
+updateStatus();
+
+setInterval(updateStatus, 30 * 1000);
+
+function getStatusColor(status) {
+  return status === 'UP' ? 'var(--color-green)' : 'var(--color-red)';
+}
+
+app.get('/', async (req, res) => {
+  try {
+    const statusPromises = sites.map(async (site) => {
+      return new Promise((resolve, reject) => {
+        db.all('SELECT status, response_time, timestamp FROM status_history WHERE site_name = ? ORDER BY timestamp DESC LIMIT 120',
+          [site.name], (err, rows) => {
+            if (err) {
+              console.error(`Error fetching data for ${site.name}:`, err.message);
+              reject(err);
+            } else {
+              const recentStatus = rows[0] || { status: 'UNKNOWN', response_time: null };
+              const upChecks = rows.filter(record => record.status === 'UP').length;
+              const uptimePercentage = rows.length > 0 ? (upChecks / rows.length * 100).toFixed(2) : '100.00';
+              const validResponseTimes = rows.filter(record => record.response_time !== null);
+              const avgResponseTime = validResponseTimes.length > 0
+                ? (validResponseTimes.reduce((sum, record) => sum + record.response_time, 0) / validResponseTimes.length).toFixed(2)
+                : 'N/A';
+
+              resolve({
+                name: site.name,
+                url: site.url,
+                currentStatus: recentStatus.status,
+                responseTime: recentStatus.response_time,
+                uptime: uptimePercentage,
+                avgResponseTime,
+                history: rows.reverse().map(record => ({
+                  ...record,
+                  timestamp: moment(record.timestamp).format()
+                }))
+              });
+            }
+          });
+      });
+    });
+
+    const statuses = await Promise.all(statusPromises);
+
+    let html = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>adabit status</title>
+          <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+          <script src="https://poweredge.xyz/moment.min.js"></script>
+          <script src="https://poweredge.xyz/moment-timezone-with-data.min.js"></script>
+          <style>
+            :root {
+                --color-background: #0d181f;
+                --color-text: #e0def4;
+                --color-link: #7289da;
+                --color-green: #43b581;
+                --color-red: #f04747;
+                --color-yellow: #faa61a;
+            }
+            body {
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+                background-color: var(--color-background);
+                color: var(--color-text);
+                margin: 0;
+                padding: 20px;
+                line-height: 1.6;
+            }
+            .container {
+                max-width: 1200px;
+                margin: 0 auto;
+            }
+            header {
+                text-align: center;
+                margin-bottom: 40px;
+            }
+            h1 {
+                color: #fff;
+                font-size: 2.5em;
+                margin-bottom: 10px;
+            }
+            .content {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 20px;
+            }
+            .service-card {
+                background-color: #0f292b;
+                border-radius: 10px;
+                padding: 20px;
+                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+            .service-name {
+                font-size: 1.2em;
+                font-weight: bold;
+                margin-bottom: 10px;
+            }
+            .status-indicator {
+                display: inline-block;
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                margin-right: 5px;
+            }
+            .stats {
+                margin-top: 15px;
+                font-size: 0.9em;
+            }
+            .history-graph {
+                margin-top: 20px;
+                height: 100px;
+            }
+            footer {
+                text-align: center;
+                margin-top: 40px;
+                font-style: italic;
+            }
+          </style>
+      </head>
+      <body>
+          <div class="container">
+              <header>
+                  <h1>status.adabit.org</h1>
+              </header>
+              <main class="content">
+    `;
+    
+    statuses.forEach((site, index) => {
+        const statusColor = getStatusColor(site.currentStatus);
+        
+        html += `
+            <div class="service-card">
+                <div class="service-name">
+                    <span class="status-indicator" style="background-color: ${statusColor};"></span>
+                    ${site.name}
+                </div>
+                <div>Status: ${site.currentStatus}</div>
+                <div>Response Time: ${site.responseTime ? `${site.responseTime}ms` : 'N/A'}</div>
+                <div class="stats">
+                    <div>Uptime: ${site.uptime}%</div>
+                    <div>Avg Response Time: ${site.avgResponseTime}ms</div>
+                </div>
+                <div class="history-graph">
+                    <canvas id="chart-${index}"></canvas>
+                </div>
+            </div>
+        `;
+    
+        html += `
         <script>
-            document.addEventListener('DOMContentLoaded', async () => {
-                const response = await fetch('/config');
-                const config = await response.json();
-                document.getElementById('dataLimit').value = config.data_limit;
-                document.getElementById('updateInterval').value = config.update_interval;
-                document.getElementById('sites').value = config.sites;
-            });
+            (function() {
+                const data = ${JSON.stringify(site.history)};
+                const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                const labels = data.map(record => moment(record.timestamp).tz(userTimezone).format('HH:mm:ss'));
+                const datapoints = data.map(record => record.response_time);
 
-            document.getElementById('configForm').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target);
-                const config = Object.fromEntries(formData.entries());
-                config.sites = JSON.parse(config.sites);
-
-                const response = await fetch('/config', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
+                new Chart(document.getElementById('chart-${index}'), {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Response Time',
+                            data: datapoints,
+                            fill: true,
+                            borderColor: '#43b581',
+                            cubicInterpolationMode: 'monotone',
+                            tension: 0.2,
+                            pointBorderWidth: 0
+                        }]
                     },
-                    body: JSON.stringify(config),
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                display: false
+                            },
+                            y: {
+                                beginAtZero: true
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: false
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    title: function(context) {
+                                        const index = context[0].dataIndex;
+                                        return moment(data[index].timestamp).tz(userTimezone).format('YYYY-MM-DD HH:mm:ss');
+                                    }
+                                }
+                            }
+                        }
+                    }
                 });
-
-                if (response.ok) {
-                    alert('Configuration saved successfully');
-                } else {
-                    alert('Error saving configuration');
+            })();
+        </script>
+        `;
+    });
+    
+    html += `
+            </main>
+            <footer>
+                <p>trans rights are human rights</p>
+            </footer>
+        </div>
+        <script>
+            // Check for new data every 30 seconds
+            const checkForNewData = async () => {
+                const response = await fetch('/');
+                const newData = await response.text();
+                if (newData !== document.documentElement.outerHTML) {
+                    location.reload();
                 }
-            });
+            };
+            setInterval(checkForNewData, 30 * 1000);
         </script>
     </body>
     </html>
-  `);
-});
-
-app.post('/config', (req, res) => {
-  const { data_limit, update_interval, sites } = req.body;
-  const config = { data_limit, update_interval, sites: JSON.stringify(sites) };
-  db.run('UPDATE configuration SET data_limit = ?, update_interval = ?, sites = ? WHERE id = 1', 
-    [config.data_limit, config.update_interval, config.sites], function (err) {
-      if (err) {
-        console.error('Error saving configuration:', err.message);
-        res.status(500).json({ error: 'Error saving configuration' });
-      } else {
-        res.json({ message: 'Configuration saved successfully' });
-      }
-  });
+    `;
+    
+    // Send the HTML response
+    res.send(html);
+  } catch (error) {
+    console.error('Error generating status page:', error.message);
+    res.status(500).send('An error occurred while generating the status page');
+  }
 });
 
 app.listen(port, () => {
   console.log(`App listening at http://localhost:${port}`);
 });
-
-// Start the status update loop
-(async function updateLoop() {
-  try {
-    const allPreferences = await new Promise((resolve, reject) => {
-      db.all('SELECT * FROM user_preferences', (err, rows) => {
-        if (err) reject(err);
-        else resolve(rows);
-      });
-    });
-
-    for (const preferences of allPreferences) {
-      const sites = JSON.parse(preferences.sites);
-      await updateStatus(sites);
-    }
-
-    const minInterval = Math.min(...allPreferences.map(p => p.update_interval), 30); // Default to 30 seconds if no preferences
-    setTimeout(updateLoop, minInterval * 1000);
-  } catch (error) {
-    console.error('Error in update loop:', error);
-    setTimeout(updateLoop, 30000); // Retry after 30 seconds in case of error
-  }
-})();
