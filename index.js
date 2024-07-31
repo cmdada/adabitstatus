@@ -16,7 +16,7 @@ const db = new sqlite3.Database('./status.db', (err) => {
 
 const sites = [
   { name: 'nextcloud.poweredge.xyz', url: 'https://nextcloud.poweredge.xyz/' },
-  { name: 'navidrome.poweredge.xyz', url: 'https://navidrome.poweredge.xyz/' },
+  { name: 'music.poweredge.xyz', url: 'https://music.poweredge.xyz/' },
   { name: 'poweredge.xyz', url: 'https://poweredge.xyz' },
   { name: 'n8n.poweredge.xyz', url: 'https://n8n.poweredge.xyz/' },
   { name: 'tbds.adabit.org', url: 'https://tbds.adabit.org/' },
