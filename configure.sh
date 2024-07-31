@@ -11,7 +11,7 @@ prompt() {
 }
 
 # Initialize the configuration
-echo "Configuring sites..."
+echo "Configuring monitored sites..."
 SITES=()
 
 # Get the number of sites
