@@ -5,6 +5,8 @@
 adabitstatus
 =================
 <a href="https://oql.avris.it/license/v1.1" target="_blank" rel="noopener"><img src="https://badgers.space/badge/License/OQL/pink" alt="License: OQL" style="vertical-align: middle;"/></a>
+[![Docker](https://github.com/cmdada/adabitstatus/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/cmdada/adabitstatus/actions/workflows/docker-publish.yml)
+<p></p>
 
 What is this?
 --------------------------
