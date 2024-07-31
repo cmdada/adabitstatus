@@ -10,9 +10,8 @@ What is this?
 --------------------------
 adabitstatus is a homemade status page for all of my microservices written in nodejs, if you want to run it yourself just like... credit me on the page please. (also to change what sites you're monitoring install [gum](https://github.com/charmbracelet/gum) and run ```./configure.sh```)
 
-Install
+Install via Docker
 --------------------------
-run ```docker pull ghcr.io/cmdada/adabitstatus:main && docker run -p 3001:3001 adabitstatus```
-
+run ```docker pull ghcr.io/cmdada/adabitstatus:main && docker run -v -p 3001:3001 ghcr.io/cmdada/adabitstatus:main ```
 
 ![image](https://github.com/user-attachments/assets/daaa4307-26d9-41af-ad93-a7b46ca97b44)
