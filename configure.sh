@@ -15,12 +15,12 @@ echo "Configuring sites..."
 SITES=()
 
 # Get the number of sites
-SITE_COUNT=$(gum input --prompt "How many sites would you like to monitor?" --placeholder "Enter number")
+SITE_COUNT=$(gum input --prompt "How many sites would you like to monitor? " --placeholder "Enter number")
 SITE_COUNT=${SITE_COUNT:-1}
 
 for i in $(seq 1 "$SITE_COUNT"); do
-  NAME=$(gum input --prompt "Enter name for site $i" --placeholder "Site name")
-  URL=$(gum input --prompt "Enter URL for site $i" --placeholder "Site URL")
+  NAME=$(gum input --prompt "Enter name for site $i " --placeholder "Site name")
+  URL=$(gum input --prompt "Enter URL for site $i " --placeholder "Site URL")
   SITES+=("{\"name\": \"$NAME\", \"url\": \"$URL\"}")
 done
 
