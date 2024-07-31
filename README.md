@@ -12,6 +12,6 @@ adabitstatus is a homemade status page for all of my microservices written in no
 
 Install via Docker
 --------------------------
-run ```docker pull ghcr.io/cmdada/adabitstatus:main && docker start -p 3001:3001 ghcr.io/cmdada/adabitstatus:main ```
-
+run ```docker pull ghcr.io/cmdada/adabitstatus:main && docker run -n status -p 3001:3001 ghcr.io/cmdada/adabitstatus:main ```
+and to configure ```docker exec -it status ./configure.sh```
 ![image](https://github.com/user-attachments/assets/daaa4307-26d9-41af-ad93-a7b46ca97b44)
