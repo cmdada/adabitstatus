@@ -43,7 +43,6 @@ function createTable() {
   });
 }
 
-
 async function checkStatus(url) {
   try {
     const startTime = Date.now();
@@ -86,6 +85,14 @@ function getStatusColor(status) {
 }
 
 app.get('/', async (req, res) => {
+  const userAgent = req.get('User-Agent');
+  
+  // Check if the user agent includes "WiiU"
+  if (userAgent && userAgent.includes('WiiU')) {
+    res.send('Hello, WiiU user');
+    return;
+  }
+
   try {
     const statusPromises = sites.map(async (site) => {
       return new Promise((resolve, reject) => {
