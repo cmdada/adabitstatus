@@ -1,0 +1,7 @@
+services:
+  status:
+    image: ghcr.io/cmdada/adabitstatus:main
+    container_name: adabitstatus
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
