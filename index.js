@@ -18,6 +18,7 @@ try {
   console.error('Error loading config file:', err.message);
 }
 
+// Initialize database
 const db = new sqlite3.Database('./status.db', (err) => {
   if (err) {
     console.error('Error opening database:', err.message);
@@ -26,6 +27,22 @@ const db = new sqlite3.Database('./status.db', (err) => {
     createTable();
   }
 });
+
+// Serve static files from the current directory
+app.use(express.static(__dirname, {
+  setHeaders: (res, path) => {
+    if (path.endsWith('.js')) {
+      res.set('Content-Type', 'application/javascript');
+    }
+    else if (path.endsWith('.json')) {
+      res.set('Content-Type', 'application/json');
+    }
+    res.set('X-Content-Type-Options', 'nosniff');
+    res.set('X-Frame-Options', 'SAMEORIGIN');
+  },
+  dotfiles: 'deny',
+  index: false
+}));
 
 function createTable() {
   db.run(`CREATE TABLE IF NOT EXISTS status_history (
@@ -76,18 +93,88 @@ async function updateStatus() {
   console.log('Status update complete.');
 }
 
-updateStatus();
+// File browser route
+app.get('/files', (req, res) => {
+  fs.readdir(__dirname, (err, files) => {
+    if (err) {
+      res.status(500).send('Error reading directory');
+      return;
+    }
 
-setInterval(updateStatus, 30 * 1000);
+    const safeFiles = files.filter(file => 
+      !file.startsWith('.')
+    );
+
+    let html = `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>File Browser</title>
+          <style>
+            :root {
+                --color-background: #0d181f;
+                --color-text: #e0def4;
+                --color-link: #7289da;
+            }
+            body {
+                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+                background-color: var(--color-background);
+                color: var(--color-text);
+                margin: 0;
+                padding: 20px;
+                line-height: 1.6;
+            }
+            .container {
+                max-width: 800px;
+                margin: 0 auto;
+            }
+            h1 {
+                color: #fff;
+                margin-bottom: 20px;
+            }
+            .file-list {
+                list-style: none;
+                padding: 0;
+            }
+            .file-list li {
+                margin: 10px 0;
+            }
+            .file-list a {
+                color: var(--color-link);
+                text-decoration: none;
+            }
+            .file-list a:hover {
+                text-decoration: underline;
+            }
+          </style>
+      </head>
+      <body>
+          <div class="container">
+              <h1>File Browser</h1>
+              <ul class="file-list">
+                  ${safeFiles.map(file => `
+                      <li><a href="/${file}">${file}</a></li>
+                  `).join('')}
+              </ul>
+          </div>
+      </body>
+      </html>
+    `;
+    
+    res.send(html);
+  });
+});
 
 function getStatusColor(status) {
   return status === 'UP' ? 'var(--color-green)' : 'var(--color-red)';
 }
 
+// Main status page route
 app.get('/', async (req, res) => {
   const userAgent = req.get('User-Agent');
   
-  // Check if the user agent includes "WiiU"
   if (userAgent && userAgent.includes('WiiU')) {
     res.send('Hello, WiiU user');
     return;
@@ -129,7 +216,7 @@ app.get('/', async (req, res) => {
 
     const statuses = await Promise.all(statusPromises);
 
-    let html = `
+    const html = `
       <!DOCTYPE html>
       <html lang="en">
       <head>
@@ -213,106 +300,92 @@ app.get('/', async (req, res) => {
                   <h1>status.adabit.org</h1>
               </header>
               <main class="content">
-    `;
-    
-    statuses.forEach((site, index) => {
-        const statusColor = getStatusColor(site.currentStatus);
-        
-        html += `
-            <div class="service-card">
-                <div class="service-name">
-                    <span class="status-indicator" style="background-color: ${statusColor};"></span>
-                    ${site.name}
-                </div>
-                <div>Status: ${site.currentStatus}</div>
-                <div>Response Time: ${site.responseTime ? `${site.responseTime}ms` : 'N/A'}</div>
-                <div class="stats">
-                    <div>Uptime: ${site.uptime}%</div>
-                    <div>Avg Response Time: ${site.avgResponseTime}ms</div>
-                </div>
-                <div class="history-graph">
-                    <canvas id="chart-${index}"></canvas>
-                </div>
-            </div>
-        `;
-    
-        html += `
-        <script>
-            (function() {
-                const data = ${JSON.stringify(site.history)};
-                const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                const labels = data.map(record => moment(record.timestamp).tz(userTimezone).format('HH:mm:ss'));
-                const datapoints = data.map(record => record.response_time);
+              ${statuses.map((site, index) => `
+                  <div class="service-card">
+                      <div class="service-name">
+                          <span class="status-indicator" style="background-color: ${getStatusColor(site.currentStatus)};"></span>
+                          ${site.name}
+                      </div>
+                      <div>Status: ${site.currentStatus}</div>
+                      <div>Response Time: ${site.responseTime ? `${site.responseTime}ms` : 'N/A'}</div>
+                      <div class="stats">
+                          <div>Uptime: ${site.uptime}%</div>
+                          <div>Avg Response Time: ${site.avgResponseTime}ms</div>
+                      </div>
+                      <div class="history-graph">
+                          <canvas id="chart-${index}"></canvas>
+                      </div>
+                  </div>
+                  <script>
+                      (function() {
+                          const data = ${JSON.stringify(site.history)};
+                          const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                          const labels = data.map(record => moment(record.timestamp).tz(userTimezone).format('HH:mm:ss'));
+                          const datapoints = data.map(record => record.response_time);
 
-                new Chart(document.getElementById('chart-${index}'), {
-                    type: 'line',
-                    data: {
-                        labels: labels,
-                        datasets: [{
-                            label: 'Response Time',
-                            data: datapoints,
-                            fill: true,
-                            borderColor: '#43b581',
-                            cubicInterpolationMode: 'monotone',
-                            tension: 0.2,
-                            pointBorderWidth: 0
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        scales: {
-                            x: {
-                                display: false
-                            },
-                            y: {
-                                beginAtZero: true
-                            }
-                        },
-                        plugins: {
-                            legend: {
-                                display: false
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    title: function(context) {
-                                        const index = context[0].dataIndex;
-                                        return moment(data[index].timestamp).tz(userTimezone).format('YYYY-MM-DD HH:mm:ss');
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
-            })();
-        </script>
-        `;
-    });
-    
-    html += `
-            </main>
-            <footer>
-                <p>trans rights are human rights</p>
-            </footer>
-        </div>
-        <script>
-            // Check for new data every 30 seconds
-            const checkForNewData = async () => {
-                const response = await fetch('/');
-                const newData = await response.text();
-                if (newData !== document.documentElement.outerHTML) {
-                    location.reload();
-                }
-            };
-            setInterval(checkForNewData, 30 * 1000);
-        </script>
-        <script data-goatcounter="https://uwu.poweredge.xyz/count"
-                async src="//uwu.poweredge.xyz/count.js"></script>
-    </body>
-    </html>
+                          new Chart(document.getElementById('chart-${index}'), {
+                              type: 'line',
+                              data: {
+                                  labels: labels,
+                                  datasets: [{
+                                      label: 'Response Time',
+                                      data: datapoints,
+                                      fill: true,
+                                      borderColor: '#43b581',
+                                      cubicInterpolationMode: 'monotone',
+                                      tension: 0.2,
+                                      pointBorderWidth: 0
+                                  }]
+                              },
+                              options: {
+                                  responsive: true,
+                                  maintainAspectRatio: false,
+                                  scales: {
+                                      x: {
+                                          display: false
+                                      },
+                                      y: {
+                                          beginAtZero: true
+                                      }
+                                  },
+                                  plugins: {
+                                      legend: {
+                                          display: false
+                                      },
+                                      tooltip: {
+                                          callbacks: {
+                                              title: function(context) {
+                                                  const index = context[0].dataIndex;
+                                                  return moment(data[index].timestamp).tz(userTimezone).format('YYYY-MM-DD HH:mm:ss');
+                                              }
+                                          }
+                                      }
+                                  }
+                              }
+                          });
+                      })();
+                  </script>
+              `).join('')}
+              </main>
+              <footer>
+                  <p>trans rights are human rights <a href="/files">Source Files</a></p>
+              </footer>
+          </div>
+          <script>
+              // Check for new data every 30 seconds
+              const checkForNewData = async () => {
+                  const response = await fetch('/');
+                  const newData = await response.text();
+                  if (newData !== document.documentElement.outerHTML) {
+                      location.reload();
+                  }
+              };
+              setInterval(checkForNewData, 30 * 1000);
+          </script>
+      </body>
+      </html>
     `;
     
-    // Send the HTML response
     res.send(html);
   } catch (error) {
     console.error('Error generating status page:', error.message);
@@ -320,6 +393,22 @@ app.get('/', async (req, res) => {
   }
 });
 
+// Start the status update interval
+updateStatus();
+setInterval(updateStatus, 30 * 1000);
+
 app.listen(port, () => {
   console.log(`App listening at http://localhost:${port}`);
+});
+
+// Graceful shutdown
+process.on('SIGINT', () => {
+  db.close((err) => {
+    if (err) {
+      console.error('Error closing database:', err.message);
+    } else {
+      console.log('Database connection closed.');
+    }
+    process.exit(0);
+  });
 });
