@@ -6,6 +6,8 @@ const port = 3001;
 const moment = require('moment-timezone');
 const fs = require('fs');
 const path = require('path');
+const { marked } = require('marked');
+const { archiver } = require('archiver');
 
 // Load configuration
 const configFilePath = path.resolve(__dirname, 'config.json');
@@ -26,6 +28,12 @@ const db = new sqlite3.Database('./status.db', (err) => {
     console.log('Connected to the SQLite database.');
     createTable();
   }
+});
+
+// Configure marked for safe rendering
+marked.setOptions({
+  headerIds: false,
+  mangle: false
 });
 
 // Serve static files from the current directory
@@ -93,17 +101,70 @@ async function updateStatus() {
   console.log('Status update complete.');
 }
 
-// File browser route
-app.get('/files', (req, res) => {
-  fs.readdir(__dirname, (err, files) => {
-    if (err) {
-      res.status(500).send('Error reading directory');
-      return;
-    }
+// Download all files as zip
+app.get('/download-all', (req, res) => {
+  const archive = archiver('zip', {
+    zlib: { level: 9 }
+  });
 
-    const safeFiles = files.filter(file => 
-      !file.startsWith('.')
-    );
+  res.attachment('source-files.zip');
+  archive.pipe(res);
+
+  const files = fs.readdirSync(__dirname).filter(file => !file.startsWith('.'));
+  
+  files.forEach(file => {
+    const filePath = path.join(__dirname, file);
+    if (fs.statSync(filePath).isFile()) {
+      archive.file(filePath, { name: file });
+    }
+  });
+
+  archive.finalize();
+});
+
+// File browser route with enhanced features
+app.get('/files', async (req, res) => {
+  try {
+    const files = fs.readdirSync(__dirname);
+    const safeFiles = files.filter(file => !file.startsWith('.') && !file.startsWith('node_modules'));
+    
+    const fileDetails = safeFiles.map(file => {
+      const filePath = path.join(__dirname, file);
+      const stats = fs.statSync(filePath);
+      return {
+        name: file,
+        size: stats.size,
+        modified: stats.mtime,
+        isDirectory: stats.isDirectory(),
+        type: path.extname(file).toLowerCase()
+      };
+    });
+
+    // Sort files
+    const sortBy = req.query.sort || 'name';
+    const sortOrder = req.query.order === 'desc' ? -1 : 1;
+    
+    fileDetails.sort((a, b) => {
+      // Directories always come first
+      if (a.isDirectory !== b.isDirectory) {
+        return b.isDirectory ? 1 : -1;
+      }
+      
+      switch (sortBy) {
+        case 'size':
+          return (a.size - b.size) * sortOrder;
+        case 'modified':
+          return (a.modified - b.modified) * sortOrder;
+        default:
+          return a.name.localeCompare(b.name) * sortOrder;
+      }
+    });
+
+    // Check for README.md
+    let readmeContent = '';
+    if (fs.existsSync(path.join(__dirname, 'README.md'))) {
+      readmeContent = marked(fs.readFileSync(path.join(__dirname, 'README.md'), 'utf8'));
+    }
 
     let html = `
       <!DOCTYPE html>
@@ -112,14 +173,18 @@ app.get('/files', (req, res) => {
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
           <title>File Browser</title>
+          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.2.0/github-markdown-dark.min.css">
           <style>
             :root {
-                --color-background: #0d181f;
-                --color-text: #e0def4;
-                --color-link: #7289da;
+                --color-background: #0d1117;
+                --color-foreground: #161b22;
+                --color-text: #c9d1d9;
+                --color-link: #58a6ff;
+                --color-border: #30363d;
+                --color-hover: #1f2937;
             }
             body {
-                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
                 background-color: var(--color-background);
                 color: var(--color-text);
                 margin: 0;
@@ -127,44 +192,162 @@ app.get('/files', (req, res) => {
                 line-height: 1.6;
             }
             .container {
-                max-width: 800px;
+                max-width: 1012px;
                 margin: 0 auto;
             }
-            h1 {
-                color: #fff;
+            .header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
                 margin-bottom: 20px;
+                padding: 16px;
+                background-color: var(--color-foreground);
+                border: 1px solid var(--color-border);
+                border-radius: 6px;
             }
-            .file-list {
-                list-style: none;
-                padding: 0;
+            .download-all {
+                padding: 5px 16px;
+                font-size: 14px;
+                font-weight: 500;
+                line-height: 20px;
+                color: var(--color-text);
+                background-color: #238636;
+                border: 1px solid rgba(240,246,252,0.1);
+                border-radius: 6px;
+                cursor: pointer;
+                text-decoration: none;
             }
-            .file-list li {
-                margin: 10px 0;
+            .download-all:hover {
+                background-color: #2ea043;
             }
-            .file-list a {
+            .file-browser {
+                background-color: var(--color-foreground);
+                border: 1px solid var(--color-border);
+                border-radius: 6px;
+                overflow: hidden;
+            }
+            .file-table {
+                width: 100%;
+                border-collapse: collapse;
+            }
+            .file-table th {
+                padding: 16px;
+                background-color: var(--color-background);
+                border-bottom: 1px solid var(--color-border);
+                text-align: left;
+                font-weight: 600;
+                cursor: pointer;
+            }
+            .file-table td {
+                padding: 8px 16px;
+                border-bottom: 1px solid var(--color-border);
+            }
+            .file-table tr:hover {
+                background-color: var(--color-hover);
+            }
+            .file-link {
                 color: var(--color-link);
                 text-decoration: none;
             }
-            .file-list a:hover {
+            .file-link:hover {
                 text-decoration: underline;
+            }
+            .file-icon {
+                margin-right: 8px;
+            }
+            .readme {
+                margin-top: 20px;
+                padding: 16px;
+                background-color: var(--color-foreground);
+                border: 1px solid var(--color-border);
+                border-radius: 6px;
+            }
+            .sort-icon::after {
+                content: "↓";
+                margin-left: 4px;
+                opacity: 0.5;
+            }
+            .sort-icon.desc::after {
+                content: "↑";
+            }
+            .markdown-body {
+                background-color: transparent;
             }
           </style>
       </head>
       <body>
           <div class="container">
-              <h1>File Browser</h1>
-              <ul class="file-list">
-                  ${safeFiles.map(file => `
-                      <li><a href="/${file}">${file}</a></li>
-                  `).join('')}
-              </ul>
+              ${readmeContent ? `
+                  <div class="readme">
+                      <div class="markdown-body">
+                          ${readmeContent}
+                      </div>
+                  </div>
+              ` : ''}
+			  <br></br>
+              <div class="file-browser">
+                  <table class="file-table">
+                      <thead>
+                          <tr>
+                              <th class="sort-icon ${sortBy === 'name' ? sortOrder === -1 ? 'desc' : '' : ''}"
+                                  onclick="window.location.href='/files?sort=name&order=${sortBy === 'name' && sortOrder === 1 ? 'desc' : 'asc'}'">
+                                  Name
+                              </th>
+                              <th class="sort-icon ${sortBy === 'size' ? sortOrder === -1 ? 'desc' : '' : ''}"
+                                  onclick="window.location.href='/files?sort=size&order=${sortBy === 'size' && sortOrder === 1 ? 'desc' : 'asc'}'">
+                                  Size
+                              </th>
+                              <th class="sort-icon ${sortBy === 'modified' ? sortOrder === -1 ? 'desc' : '' : ''}"
+                                  onclick="window.location.href='/files?sort=modified&order=${sortBy === 'modified' && sortOrder === 1 ? 'desc' : 'asc'}'">
+                                  Last Modified
+                              </th>
+                          </tr>
+                      </thead>
+                      <tbody>
+                          ${fileDetails.map(file => `
+                              <tr>
+                                  <td>
+                                      <a href="/${file.name}" class="file-link">
+                                          ${file.name}
+                                      </a>
+                                  </td>
+                                  <td>${moment(file.modified).format('MMM D, YYYY HH:mm')}</td>
+                              </tr>
+                          `).join('')}
+                      </tbody>
+                  </table>
+              </div>
           </div>
+          <script>
+          function getFileIcon(type) {
+              switch(type) {
+                  case '.js': return '📄';
+                  case '.json': return '📄';
+                  case '.md': return '📝';
+                  case '.css': return '🎨';
+                  case '.html': return '🌐';
+                  case '.db': return '💾';
+                  default: return '📄';
+              }
+          }
+
+          function formatFileSize(bytes) {
+              if (bytes === 0) return '0 B';
+              const k = 1024;
+              const sizes = ['B', 'KB', 'MB', 'GB'];
+              const i = Math.floor(Math.log(bytes) / Math.log(k));
+              return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+          }
+          </script>
       </body>
       </html>
     `;
     
     res.send(html);
-  });
+  } catch (error) {
+    console.error('Error in file browser:', error);
+    res.status(500).send('Error reading directory');
+  }
 });
 
 function getStatusColor(status) {
@@ -222,193 +405,193 @@ app.get('/', async (req, res) => {
       <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>adabit status</title>
-          <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-          <script src="https://poweredge.xyz/moment.min.js"></script>
-          <script src="https://poweredge.xyz/moment-timezone-with-data.min.js"></script>
-          <style>
-            :root {
-                --color-background: #0d181f;
-                --color-text: #e0def4;
-                --color-link: #7289da;
-                --color-green: #43b581;
-                --color-red: #f04747;
-                --color-yellow: #faa61a;
+          <title>adabit</title>
+                    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+                    <script src="https://poweredge.xyz/moment.min.js"></script>
+                    <script src="https://poweredge.xyz/moment-timezone-with-data.min.js"></script>
+                    <style>
+                      :root {
+                          --color-background: #0d181f;
+                          --color-text: #e0def4;
+                          --color-link: #7289da;
+                          --color-green: #43b581;
+                          --color-red: #f04747;
+                          --color-yellow: #faa61a;
+                      }
+                      body {
+                          font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+                          background-color: var(--color-background);
+                          color: var(--color-text);
+                          margin: 0;
+                          padding: 20px;
+                          line-height: 1.6;
+                      }
+                      .container {
+                          max-width: 1200px;
+                          margin: 0 auto;
+                      }
+                      header {
+                          text-align: center;
+                          margin-bottom: 40px;
+                      }
+                      h1 {
+                          color: #fff;
+                          font-size: 2.5em;
+                          margin-bottom: 10px;
+                      }
+                      .content {
+                          display: grid;
+                          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                          gap: 20px;
+                      }
+                      .service-card {
+                          background-color: #0f292b;
+                          border-radius: 10px;
+                          padding: 20px;
+                          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+                      }
+                      .service-name {
+                          font-size: 1.2em;
+                          font-weight: bold;
+                          margin-bottom: 10px;
+                      }
+                      .status-indicator {
+                          display: inline-block;
+                          width: 10px;
+                          height: 10px;
+                          border-radius: 50%;
+                          margin-right: 5px;
+                      }
+                      .stats {
+                          margin-top: 15px;
+                          font-size: 0.9em;
+                      }
+                      .history-graph {
+                          margin-top: 20px;
+                          height: 100px;
+                      }
+                      footer {
+                          text-align: center;
+                          margin-top: 40px;
+                          font-style: italic;
+                      }
+                    </style>
+                </head>
+                <body>
+                    <div class="container">
+                        <header>
+                            <h1>status.adabit.org</h1>
+                        </header>
+                        <main class="content">
+                        ${statuses.map((site, index) => `
+                            <div class="service-card">
+                                <div class="service-name">
+                                    <span class="status-indicator" style="background-color: ${getStatusColor(site.currentStatus)};"></span>
+                                    ${site.name}
+                                </div>
+                                <div>Status: ${site.currentStatus}</div>
+                                <div>Response Time: ${site.responseTime ? `${site.responseTime}ms` : 'N/A'}</div>
+                                <div class="stats">
+                                    <div>Uptime: ${site.uptime}%</div>
+                                    <div>Avg Response Time: ${site.avgResponseTime}ms</div>
+                                </div>
+                                <div class="history-graph">
+                                    <canvas id="chart-${index}"></canvas>
+                                </div>
+                            </div>
+                            <script>
+                                (function() {
+                                    const data = ${JSON.stringify(site.history)};
+                                    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+                                    const labels = data.map(record => moment(record.timestamp).tz(userTimezone).format('HH:mm:ss'));
+                                    const datapoints = data.map(record => record.response_time);
+          
+                                    new Chart(document.getElementById('chart-${index}'), {
+                                        type: 'line',
+                                        data: {
+                                            labels: labels,
+                                            datasets: [{
+                                                label: 'Response Time',
+                                                data: datapoints,
+                                                fill: true,
+                                                borderColor: '#43b581',
+                                                cubicInterpolationMode: 'monotone',
+                                                tension: 0.2,
+                                                pointBorderWidth: 0
+                                            }]
+                                        },
+                                        options: {
+                                            responsive: true,
+                                            maintainAspectRatio: false,
+                                            scales: {
+                                                x: {
+                                                    display: false
+                                                },
+                                                y: {
+                                                    beginAtZero: true
+                                                }
+                                            },
+                                            plugins: {
+                                                legend: {
+                                                    display: false
+                                                },
+                                                tooltip: {
+                                                    callbacks: {
+                                                        title: function(context) {
+                                                            const index = context[0].dataIndex;
+                                                            return moment(data[index].timestamp).tz(userTimezone).format('YYYY-MM-DD HH:mm:ss');
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    });
+                                })();
+                            </script>
+                        `).join('')}
+                        </main>
+                        <footer>
+                            <p>trans rights are human rights <a href="/files">Source Files</a></p>
+                        </footer>
+                    </div>
+                    <script>
+                        // Check for new data every 30 seconds
+                        const checkForNewData = async () => {
+                            const response = await fetch('/');
+                            const newData = await response.text();
+                            if (newData !== document.documentElement.outerHTML) {
+                                location.reload();
+                            }
+                        };
+                        setInterval(checkForNewData, 30 * 1000);
+                    </script>
+                </body>
+                </html>
+              `;
+              
+              res.send(html);
+            } catch (error) {
+              console.error('Error generating status page:', error.message);
+              res.status(500).send('An error occurred while generating the status page');
             }
-            body {
-                font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
-                background-color: var(--color-background);
-                color: var(--color-text);
-                margin: 0;
-                padding: 20px;
-                line-height: 1.6;
-            }
-            .container {
-                max-width: 1200px;
-                margin: 0 auto;
-            }
-            header {
-                text-align: center;
-                margin-bottom: 40px;
-            }
-            h1 {
-                color: #fff;
-                font-size: 2.5em;
-                margin-bottom: 10px;
-            }
-            .content {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                gap: 20px;
-            }
-            .service-card {
-                background-color: #0f292b;
-                border-radius: 10px;
-                padding: 20px;
-                box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            }
-            .service-name {
-                font-size: 1.2em;
-                font-weight: bold;
-                margin-bottom: 10px;
-            }
-            .status-indicator {
-                display: inline-block;
-                width: 10px;
-                height: 10px;
-                border-radius: 50%;
-                margin-right: 5px;
-            }
-            .stats {
-                margin-top: 15px;
-                font-size: 0.9em;
-            }
-            .history-graph {
-                margin-top: 20px;
-                height: 100px;
-            }
-            footer {
-                text-align: center;
-                margin-top: 40px;
-                font-style: italic;
-            }
-          </style>
-      </head>
-      <body>
-          <div class="container">
-              <header>
-                  <h1>status.adabit.org</h1>
-              </header>
-              <main class="content">
-              ${statuses.map((site, index) => `
-                  <div class="service-card">
-                      <div class="service-name">
-                          <span class="status-indicator" style="background-color: ${getStatusColor(site.currentStatus)};"></span>
-                          ${site.name}
-                      </div>
-                      <div>Status: ${site.currentStatus}</div>
-                      <div>Response Time: ${site.responseTime ? `${site.responseTime}ms` : 'N/A'}</div>
-                      <div class="stats">
-                          <div>Uptime: ${site.uptime}%</div>
-                          <div>Avg Response Time: ${site.avgResponseTime}ms</div>
-                      </div>
-                      <div class="history-graph">
-                          <canvas id="chart-${index}"></canvas>
-                      </div>
-                  </div>
-                  <script>
-                      (function() {
-                          const data = ${JSON.stringify(site.history)};
-                          const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-                          const labels = data.map(record => moment(record.timestamp).tz(userTimezone).format('HH:mm:ss'));
-                          const datapoints = data.map(record => record.response_time);
-
-                          new Chart(document.getElementById('chart-${index}'), {
-                              type: 'line',
-                              data: {
-                                  labels: labels,
-                                  datasets: [{
-                                      label: 'Response Time',
-                                      data: datapoints,
-                                      fill: true,
-                                      borderColor: '#43b581',
-                                      cubicInterpolationMode: 'monotone',
-                                      tension: 0.2,
-                                      pointBorderWidth: 0
-                                  }]
-                              },
-                              options: {
-                                  responsive: true,
-                                  maintainAspectRatio: false,
-                                  scales: {
-                                      x: {
-                                          display: false
-                                      },
-                                      y: {
-                                          beginAtZero: true
-                                      }
-                                  },
-                                  plugins: {
-                                      legend: {
-                                          display: false
-                                      },
-                                      tooltip: {
-                                          callbacks: {
-                                              title: function(context) {
-                                                  const index = context[0].dataIndex;
-                                                  return moment(data[index].timestamp).tz(userTimezone).format('YYYY-MM-DD HH:mm:ss');
-                                              }
-                                          }
-                                      }
-                                  }
-                              }
-                          });
-                      })();
-                  </script>
-              `).join('')}
-              </main>
-              <footer>
-                  <p>trans rights are human rights <a href="/files">Source Files</a></p>
-              </footer>
-          </div>
-          <script>
-              // Check for new data every 30 seconds
-              const checkForNewData = async () => {
-                  const response = await fetch('/');
-                  const newData = await response.text();
-                  if (newData !== document.documentElement.outerHTML) {
-                      location.reload();
-                  }
-              };
-              setInterval(checkForNewData, 30 * 1000);
-          </script>
-      </body>
-      </html>
-    `;
-    
-    res.send(html);
-  } catch (error) {
-    console.error('Error generating status page:', error.message);
-    res.status(500).send('An error occurred while generating the status page');
-  }
-});
-
-// Start the status update interval
-updateStatus();
-setInterval(updateStatus, 30 * 1000);
-
-app.listen(port, () => {
-  console.log(`App listening at http://localhost:${port}`);
-});
-
-// Graceful shutdown
-process.on('SIGINT', () => {
-  db.close((err) => {
-    if (err) {
-      console.error('Error closing database:', err.message);
-    } else {
-      console.log('Database connection closed.');
-    }
-    process.exit(0);
-  });
-});
+          });
+          
+          // Start the status update interval
+          updateStatus();
+          setInterval(updateStatus, 30 * 1000);
+          
+          app.listen(port, () => {
+            console.log(`App listening at http://localhost:${port}`);
+          });
+          
+          // Graceful shutdown
+          process.on('SIGINT', () => {
+            db.close((err) => {
+              if (err) {
+                console.error('Error closing database:', err.message);
+              } else {
+                console.log('Database connection closed.');
+              }
+              process.exit(0);
+            });
+          });
