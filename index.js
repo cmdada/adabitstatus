@@ -306,6 +306,8 @@ app.get('/', async (req, res) => {
             };
             setInterval(checkForNewData, 30 * 1000);
         </script>
+        <script data-goatcounter="https://uwu.poweredge.xyz/count"
+                async src="//uwu.poweredge.xyz/count.js"></script>
     </body>
     </html>
     `;
