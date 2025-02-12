@@ -1,14 +1,12 @@
 {
   "sites": [
-    { "name": "nextcloud.poweredge.xyz", "url": "https://nextcloud.poweredge.xyz/" },
-    { "name": "music.poweredge.xyz", "url": "https://music.poweredge.xyz/" },
-    { "name": "poweredge.xyz", "url": "https://poweredge.xyz" },
-    { "name": "n8n.poweredge.xyz", "url": "https://n8n.poweredge.xyz/" },
-    { "name": "tbds.adabit.org", "url": "https://tbds.adabit.org/" },
-    { "name": "bhsgsa.org", "url": "https://bhsgsa.org/" },
-    { "name": "adas.software git", "url": "https://adas.software/" },
-    { "name": "adabit.org", "url": "https://www.adabit.org/" },
-    { "name": "bankbankandbank.com", "url": "https://bankbankandbank.com/" },
-    { "name": "1157.adabit.org", "url": "https://1157.adabit.org/" }
+    { "name": "nextcloud", "url": "https://nextcloud.poweredge.xyz/" },
+    { "name": "music", "url": "https://music.poweredge.xyz/" },
+    { "name": "adarun", "url": "https://poweredge.xyz" },
+    { "name": "n8n", "url": "https://n8n.poweredge.xyz/" },
+    { "name": "bhs gsa", "url": "https://bhsgsa.org/" },
+    { "name": "adabit", "url": "https://www.adabit.org/" },
+    { "name": "bankbankandbank", "url": "https://bankbankandbank.com/" },
+    { "name": "robosharks", "url": "https://robosharks.org/" }
   ]
 }
