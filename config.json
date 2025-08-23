@@ -1,10 +1,10 @@
 {
   "sites": [
-    { "name": "nextcloud", "url": "https://nextcloud.poweredge.xyz/" },
+    { "name": "metadada", "url": "https://metadada.adabit.org/" },
     { "name": "music", "url": "https://music.poweredge.xyz/" },
     { "name": "adarun", "url": "https://poweredge.xyz" },
-    { "name": "n8n", "url": "https://n8n.poweredge.xyz/" },
-    { "name": "bhs gsa", "url": "https://bhsgsa.org/" },
+    { "name": "ada5", "url": "https://5.adabit.org" },
+    { "name": "ada3", "url": "https://3.adabit.org/" },
     { "name": "adabit", "url": "https://www.adabit.org/" },
     { "name": "bankbankandbank", "url": "https://bankbankandbank.com/" },
     { "name": "robosharks", "url": "https://robosharks.org/" }
