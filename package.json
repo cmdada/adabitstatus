@@ -3,7 +3,7 @@
     "archiver": "^7.0.1",
     "axios": "^1.13.2",
     "bcrypt": "^5.1.1",
-    "express": "^4.22.1",
+    "express": "^4.22.0",
     "express-session": "^1.18.2",
     "lucide-react": "^0.414.0",
     "marked": "^14.1.4",
